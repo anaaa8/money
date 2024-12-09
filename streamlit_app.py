@@ -1,148 +1,157 @@
 import streamlit as st
-from streamlit_option_menu import option_menu
-import streamlit.components.v1 as components
+import json
+import os
+import random
+import string
 
-# Set page configuration at the very beginning of the script
-st.set_page_config(page_title="Pengelolaan Keuangan Pribadi", layout="wide")
+# File untuk menyimpan data
+DATA_FILE = "dompet_digital.json"
 
-# CSS for Background Animation and Theme
-st.markdown(
-    """
+# Fungsi untuk memuat data dari file
+def load_data():
+    if not os.path.exists(DATA_FILE):
+        return {}
+    with open(DATA_FILE, "r") as file:
+        return json.load(file)
+
+# Fungsi untuk menyimpan data ke file
+def save_data(data):
+    with open(DATA_FILE, "w") as file:
+        json.dump(data, file, indent=4)
+
+# Fungsi untuk format Rupiah
+def format_rupiah(amount):
+    return f"Rp {amount:,.0f}".replace(",", ".")
+
+# Fungsi untuk menghasilkan nama pengguna otomatis
+def generate_username():
+    return ''.join(random.choices(string.ascii_lowercase + string.digits, k=8))
+
+# Fungsi untuk registrasi akun
+def register():
+    st.subheader("📝 Registrasi Akun")
+    username = generate_username()
+    st.write(f"Nama Pengguna Anda: {username}")
+    pin = st.text_input("Buat PIN (6 digit)", type="password")
+    if st.button("Buat Akun"):
+        if username in data:
+            st.error("Akun sudah ada!")
+        elif len(pin) != 6 or not pin.isdigit():
+            st.error("PIN harus 6 digit angka!")
+        else:
+            data[username] = {"pin": pin, "saldo": 0, "riwayat": []}
+            save_data(data)
+            st.success("Akun berhasil dibuat!")
+
+# Fungsi untuk login
+def login():
+    st.subheader("🔑 Login")
+    username = st.text_input("Nama Pengguna")
+    pin = st.text_input("PIN", type="password")
+    if st.button("Login"):
+        if username not in data:
+            st.error("Akun tidak ditemukan!")
+        elif data[username]["pin"] != pin:
+            st.error("PIN salah!")
+        else:
+            st.session_state["username"] = username
+            st.success(f"Selamat datang, {username}!")
+            st.experimental_rerun()  # Refresh aplikasi untuk menampilkan menu utama
+
+# Fungsi untuk menambah saldo
+def tambah_saldo():
+    st.subheader("💰 Tambah Saldo")
+    jumlah = st.number_input("Jumlah Saldo", min_value=0, step=1)
+    if st.button("Tambah"):
+        data[st.session_state["username"]]["saldo"] += jumlah
+        save_data(data)
+        saldo_terbaru = data[st.session_state["username"]]["saldo"]
+        st.success(f"Saldo berhasil ditambahkan. Saldo saat ini: {format_rupiah(saldo_terbaru)}")
+
+# Fungsi untuk transfer
+def transfer():
+    st.subheader("📤 Transfer")
+    penerima = st.text_input("Nama Penerima")
+    jumlah = st.number_input("Jumlah Transfer", min_value=0, step=1)
+    pin = st.text_input("Konfirmasi PIN", type="password")
+    if st.button("Kirim"):
+        if penerima not in data:
+            st.error("Penerima tidak ditemukan!")
+        elif jumlah <= 0 atau jumlah > data[st.session_state["username"]]["saldo"]:
+            st.error("Saldo tidak cukup atau jumlah tidak valid!")
+        elif data[st.session_state["username"]]["pin"] != pin:
+            st.error("PIN salah!")
+        else:
+            data[st.session_state["username"]]["saldo"] -= jumlah
+            data[penerima]["saldo"] += jumlah
+            data[st.session_state["username"]]["riwayat"].append(f"Transfer ke {penerima}: {format_rupiah(jumlah)}")
+            data[penerima]["riwayat"].append(f"Diterima dari {st.session_state['username']}: {format_rupiah(jumlah)}")
+            save_data(data)
+            st.success(f"Transfer berhasil! Anda mengirim {format_rupiah(jumlah)} ke {penerima}.")
+
+# Fungsi untuk cek saldo
+def cek_saldo():
+    st.subheader("📊 Cek Saldo")
+    saldo = data[st.session_state["username"]]["saldo"]
+    st.info(f"Saldo Anda saat ini: {format_rupiah(saldo)}")
+
+# Fungsi untuk cek riwayat transfer
+def cek_riwayat():
+    st.subheader("🧾 Riwayat Transfer")
+    riwayat = data[st.session_state["username"]]["riwayat"]
+    if riwayat:
+        for item in riwayat:
+            st.write(f"- {item}")
+    else:
+        st.info("Belum ada riwayat transaksi.")
+
+# Fungsi untuk logout
+def logout():
+    st.session_state.clear()
+    st.success("Anda telah logout.")
+    st.experimental_rerun()  # Refresh aplikasi untuk kembali ke menu login
+
+# Inisialisasi data
+data = load_data()
+
+# Streamlit: Header
+st.markdown("""
+    <div style="background: linear-gradient(to right, #ff758c, #ff7eb3); padding: 15px; border-radius: 10px;">
+        <h1 style="color: white; text-align: center;">🌐 Dompet Digital</h1>
+    </div>
     <style>
-    .main {
-        background-color: #F0F2F6;
-        transition: background-color 0.5s ease;
-    }
-    body[data-theme="dark"] .main {
-        background-color: #181818;
-    }
-    .bg-animation {
-        position: absolute;
-        width: 100%;
-        height: 100%;
-        z-index: -1;
-        background: radial-gradient(circle, rgba(238,174,202,1) 0%, rgba(148,187,233,1) 100%);
-        animation: gradient 15s ease infinite;
-    }
-    @keyframes gradient {
-        0% { background: radial-gradient(circle, rgba(238,174,202,1) 0%, rgba(148,187,233,1) 100%); }
-        50% { background: radial-gradient(circle, rgba(148,187,233,1) 0%, rgba(238,174,202,1) 100%); }
-        100% { background: radial-gradient(circle, rgba(238,174,202,1) 0%, rgba(148,187,233,1) 100%); }
-    }
+        body {
+            background: linear-gradient(-45deg, #ee7752, #e73c7e, #23a6d5, #23d5ab);
+            background-size: 400% 400%;
+            animation: gradientBG 15s ease infinite;
+        }
+        @keyframes gradientBG {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
     </style>
-    """,
-    unsafe_allow_html=True,
-)
+""", unsafe_allow_html=True)
 
-# HTML for Background Animation
-components.html(
-    """
-    <div class="bg-animation"></div>
-    """,
-    height=0,
-    width=0,
-)
-
-# Kelas untuk Pengelolaan Keuangan
-class PengelolaanKeuangan:
-    def __init__(self):
-        self.saldo = 0.0
-        self.transaksi = []
-
-    def tambah_pemasukan(self, jumlah, keterangan):
-        self.saldo += jumlah
-        self.transaksi.append(('Pemasukan', jumlah, keterangan))
-
-    def tambah_pengeluaran(self, jumlah, keterangan):
-        self.saldo -= jumlah
-        self.transaksi.append(('Pengeluaran', jumlah, keterangan))
-
-    def lihat_saldo(self):
-        return self.saldo
-
-    def lihat_transaksi(self):
-        return self.transaksi
-
-# Inisialisasi kelas Pengelolaan Keuangan
-keuangan = PengelolaanKeuangan()
-
-# Judul aplikasi
-st.title("Aplikasi Pengelolaan Keuangan Pribadi")
-
-# Menu navigasi
-with st.sidebar:
-    pilihan = option_menu("Menu", ["Tambah Pemasukan", "Tambah Pengeluaran", "Lihat Saldo", "Lihat Transaksi", "Ganti Tema"],
-                          icons=['plus', 'minus', 'wallet', 'list', 'gear'], menu_icon="cast", default_index=0)
-
-# Tambah Pemasukan
-if pilihan == "Tambah Pemasukan":
-    st.subheader("Tambah Pemasukan")
-    jumlah = st.number_input("Masukkan jumlah pemasukan: Rp", min_value=0.0)
-    keterangan = st.text_input("Masukkan keterangan")
-    if st.button("Tambah Pemasukan"):
-        keuangan.tambah_pemasukan(jumlah, keterangan)
-        st.success("Pemasukan berhasil ditambahkan!")
-
-# Tambah Pengeluaran
-elif pilihan == "Tambah Pengeluaran":
-    st.subheader("Tambah Pengeluaran")
-    jumlah = st.number_input("Masukkan jumlah pengeluaran: Rp", min_value=0.0)
-    keterangan = st.text_input("Masukkan keterangan")
-    if st.button("Tambah Pengeluaran"):
-        keuangan.tambah_pengeluaran(jumlah, keterangan)
-        st.success("Pengeluaran berhasil ditambahkan!")
-
-# Lihat Saldo
-elif pilihan == "Lihat Saldo":
-    st.subheader("Lihat Saldo")
-    saldo = keuangan.lihat_saldo()
-    st.write(f"Saldo saat ini: Rp {saldo:.2f}")
-
-# Lihat Transaksi
-elif pilihan == "Lihat Transaksi":
-    st.subheader("Lihat Transaksi")
-    transaksi = keuangan.lihat_transaksi()
-    if transaksi:
-        for jenis, jumlah, keterangan in transaksi:
-            st.write(f"{jenis}: Rp {jumlah:.2f} - {keterangan}")
-    else:
-        st.write("Belum ada transaksi")
-
-# Ganti Tema
-elif pilihan == "Ganti Tema":
-    st.subheader("Ganti Tema")
-    tema = st.selectbox("Pilih Tema", ["Default", "Dark Mode"])
-    if tema == "Dark Mode":
-        st.markdown(
-            """
-            <style>
-            body {
-                background-color: #181818;
-                color: #FFFFFF;
-            }
-            .main {
-                background-color: #181818;
-            }
-            </style>
-            """,
-            unsafe_allow_html=True,
-        )
-    else:
-        st.markdown(
-            """
-            <style>
-            body {
-                background-color: #F0F2F6;
-                color: #000000;
-            }
-            .main {
-                background-color: #F0F2F6;
-            }
-            </style>
-            """,
-            unsafe_allow_html=True,
-        )
-
-# Menjalankan aplikasi Streamlit
-if __name__ == '__main__':
-    st.set_page_config(page_title="Pengelolaan Keuangan Pribadi")
+# Cek apakah pengguna sudah login
+if "username" in st.session_state:
+    st.sidebar.subheader(f"Selamat datang, {st.session_state['username']}!")
+    menu = st.sidebar.radio("Menu", ["Tambah Saldo", "Transfer", "Cek Saldo", "Riwayat Transfer", "Logout"])
+    
+    if menu == "Tambah Saldo":
+        tambah_saldo()
+    elif menu == "Transfer":
+        transfer()
+    elif menu == "Cek Saldo":
+        cek_saldo()
+    elif menu == "Riwayat Transfer":
+        cek_riwayat()
+    elif menu == "Logout":
+        logout()
+else:
+    menu = st.sidebar.radio("Menu", ["Login", "Registrasi"])
+    
+    if menu == "Login":
+        login()
+    elif menu == "Registrasi":
+        register()
